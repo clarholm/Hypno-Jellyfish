@@ -81,21 +81,7 @@ MPU6050 mpu;
    http://code.google.com/p/arduino/issues/detail?id=958
  * ========================================================================= */
 
-//Neopixel conf
 
-#include <Adafruit_NeoPixel.h>
-#define PIN 0
- 
-Adafruit_NeoPixel pixels = Adafruit_NeoPixel(12, PIN, NEO_RGB + NEO_KHZ800);
-
-uint8_t  mode   = 0, // Current animation effect
-         offset = 0; // Position of spinny eyes
-uint32_t color  = 0xFF0000; // Start red
-uint32_t prevTime;
-
-//Neopixel conf done
-
-//MCU conf start
 
 // uncomment "OUTPUT_READABLE_QUATERNION" if you want to see the actual
 // quaternion components in a [w, x, y, z] format (not best for parsing
@@ -134,7 +120,6 @@ uint32_t prevTime;
 
 
 
-
 #define LED_PIN 13 // (Arduino is 13, Teensy is 11, Teensy++ is 6)
 bool blinkState = false;
 
@@ -156,7 +141,7 @@ float euler[3];         // [psi, theta, phi]    Euler angle container
 float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
 
 // packet structure for InvenSense teapot demo
-//uint8_t teapotPacket[14] = { '$', 0x02, 0,0, 0,0, 0,0, 0,0, 0x00, 0x00, '\r', '\n' };
+uint8_t teapotPacket[14] = { '$', 0x02, 0,0, 0,0, 0,0, 0,0, 0x00, 0x00, '\r', '\n' };
 
 
 
@@ -169,20 +154,13 @@ void dmpDataReady() {
     mpuInterrupt = true;
 }
 
-//MCU conf done
+
 
 // ================================================================
 // ===                      INITIAL SETUP                       ===
 // ================================================================
 
 void setup() {
-  
-    //Neo Pixel start
-    pixels.begin();
-    pixels.setBrightness(85); // 1/3 brightness
-    prevTime = millis();
-    //Neo Pixel done
-  
     // join I2C bus (I2Cdev library doesn't do this automatically)
     #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
         Wire.begin();
@@ -388,49 +366,9 @@ void loop() {
             Serial.write(teapotPacket, 14);
             teapotPacket[11]++; // packetCount, loops at 0xFF on purpose
         #endif
-                blinkState = !blinkState;
-        digitalWrite(LED_PIN, blinkState);
-        // blink LED to indicate activity
-    }
-        
-        //Neo Pixel part start
-        uint8_t  i;
-        uint32_t t;
-       
-        switch(mode) {
-       
-         case 0: // Random sparks - just one LED on at a time!
-          i = random(12);
-          pixels.setPixelColor(i, color);
-          pixels.show();
-          delay(10);
-          pixels.setPixelColor(i, 0);
-          break;
-       
-         case 1: // Spinny wheels (3 LEDs on at a time)
-          for(i=0; i<9; i++) {
-            uint32_t c = 0;
-            if(((offset + i) & 2) < 2) c = color; // 4 pixels on...
-            pixels.setPixelColor(   i, c); // First eye
-          }
-          pixels.show();
-          offset++;
-          delay(50);
-          break;
-        }
-       
-        t = millis();
-        if((t - prevTime) > 8000) {      // Every 8 seconds...
-          mode++;                        // Next mode
-          if(mode > 1) {                 // End of modes?
-            mode = 0;                    // Start modes over
-            color >>= 8;                 // Next color R->G->B
-            if(!color) color = 0xFF0000; // Reset to red
-          }
-          for(i=0; i<32; i++) pixels.setPixelColor(i, 0);
-          prevTime = t;
-        }
-         //Neo Pixel part stop     
-        
 
+        // blink LED to indicate activity
+        blinkState = !blinkState;
+        digitalWrite(LED_PIN, blinkState);
+    }
 }
