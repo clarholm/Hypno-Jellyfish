@@ -84,7 +84,7 @@ MPU6050 mpu;
 //Neopixel conf
 
 #include <Adafruit_NeoPixel.h>
-#define PIN 0
+#define PIN 5
  
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(12, PIN, NEO_RGB + NEO_KHZ800);
 
