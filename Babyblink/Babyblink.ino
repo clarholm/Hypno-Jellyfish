@@ -81,8 +81,8 @@ MPU6050 mpu;
    http://code.google.com/p/arduino/issues/detail?id=958
  * ========================================================================= */
 
+//Neopixel conf
 
-<<<<<<< HEAD
 #include <Adafruit_NeoPixel.h>
 #define PIN 5
  
@@ -91,13 +91,26 @@ Adafruit_NeoPixel pixels = Adafruit_NeoPixel(12, PIN, NEO_RGB + NEO_KHZ800);
 uint8_t  mode   = 0, // Current animation effect
          offset = 0; // Position of spinny eyes
 uint32_t color  = 0xFF0000; // Start red
+uint32_t currentTimeRead;
+uint32_t prevTimeRead;
 uint32_t prevTime;
+int noOfAddedSamples;
+int currentX;
+int currentY;
+int currentZ;
+int totalX;
+int totalY;
+int totalZ;
+float averageX;
+float averageY;
+float averageZ;
+float lastAverageX;
+float lastAverageY;
+float lastAverageZ;
 
 //Neopixel conf done
 
 //MCU conf start
-=======
->>>>>>> 9d0c0b8e60219a93a7dda1f4269c1ebe8e925efc
 
 // uncomment "OUTPUT_READABLE_QUATERNION" if you want to see the actual
 // quaternion components in a [w, x, y, z] format (not best for parsing
@@ -122,7 +135,7 @@ uint32_t prevTime;
 // not compensated for orientation, so +X is always +X according to the
 // sensor, just without the effects of gravity. If you want acceleration
 // compensated for orientation, us OUTPUT_READABLE_WORLDACCEL instead.
-#define OUTPUT_READABLE_REALACCEL
+//#define OUTPUT_READABLE_REALACCEL
 
 // uncomment "OUTPUT_READABLE_WORLDACCEL" if you want to see acceleration
 // components with gravity removed and adjusted for the world frame of
@@ -133,6 +146,7 @@ uint32_t prevTime;
 // uncomment "OUTPUT_TEAPOT" if you want output that matches the
 // format used for the InvenSense teapot demo
 //#define OUTPUT_TEAPOT
+
 
 
 
@@ -157,7 +171,7 @@ float euler[3];         // [psi, theta, phi]    Euler angle container
 float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
 
 // packet structure for InvenSense teapot demo
-uint8_t teapotPacket[14] = { '$', 0x02, 0,0, 0,0, 0,0, 0,0, 0x00, 0x00, '\r', '\n' };
+//uint8_t teapotPacket[14] = { '$', 0x02, 0,0, 0,0, 0,0, 0,0, 0x00, 0x00, '\r', '\n' };
 
 
 
@@ -170,13 +184,20 @@ void dmpDataReady() {
     mpuInterrupt = true;
 }
 
-
+//MCU conf done
 
 // ================================================================
 // ===                      INITIAL SETUP                       ===
 // ================================================================
 
 void setup() {
+  
+    //Neo Pixel start
+    pixels.begin();
+    pixels.setBrightness(85); // 1/3 brightness
+    prevTime = millis();
+    //Neo Pixel done
+  
     // join I2C bus (I2Cdev library doesn't do this automatically)
     #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
         Wire.begin();
@@ -206,10 +227,10 @@ void setup() {
     Serial.println(mpu.testConnection() ? F("MPU6050 connection successful") : F("MPU6050 connection failed"));
 
     // wait for ready
-    Serial.println(F("\nSend any character to begin DMP programming and demo: "));
-    while (Serial.available() && Serial.read()); // empty buffer
-    while (!Serial.available());                 // wait for data
-    while (Serial.available() && Serial.read()); // empty buffer again
+    //Serial.println(F("\nSend any character to begin DMP programming and demo: "));
+    //while (Serial.available() && Serial.read()); // empty buffer
+    //while (!Serial.available());                 // wait for data
+    //while (Serial.available() && Serial.read()); // empty buffer again
 
     // load and configure the DMP
     Serial.println(F("Initializing DMP..."));
@@ -301,90 +322,122 @@ void loop() {
         // (this lets us immediately read more without waiting for an interrupt)
         fifoCount -= packetSize;
 
-        #ifdef OUTPUT_READABLE_QUATERNION
-            // display quaternion values in easy matrix form: w x y z
-            mpu.dmpGetQuaternion(&q, fifoBuffer);
-            Serial.print("quat\t");
-            Serial.print(q.w);
-            Serial.print("\t");
-            Serial.print(q.x);
-            Serial.print("\t");
-            Serial.print(q.y);
-            Serial.print("\t");
-            Serial.println(q.z);
-        #endif
+    }
+        
+        //Neo Pixel part start
+        uint8_t  i;
+        uint32_t t;
+        
+        readDataFromMCU();
+        sumDataFromMCU();
+        if (checkIfTimeToCalculateAverage()== true){
+        calcAndClearAverage();
+        }
 
-        #ifdef OUTPUT_READABLE_EULER
-            // display Euler angles in degrees
-            mpu.dmpGetQuaternion(&q, fifoBuffer);
-            mpu.dmpGetEuler(euler, &q);
-            Serial.print("euler\t");
-            Serial.print(euler[0] * 180/M_PI);
-            Serial.print("\t");
-            Serial.print(euler[1] * 180/M_PI);
-            Serial.print("\t");
-            Serial.println(euler[2] * 180/M_PI);
-        #endif
+        /*
+        switch(mode) {
+       
+         case 0: // Random sparks - just one LED on at a time!
+          i = random(12);
+          pixels.setPixelColor(i, color);
+          pixels.show();
+          delay(10);
+          pixels.setPixelColor(i, 0);
+          break;
+       
+         case 1: // Spinny wheels (3 LEDs on at a time)
+          for(i=0; i<9; i++) {
+            uint32_t c = 0;
+            if(((offset + i) & 2) < 2) c = color; // 4 pixels on...
+            pixels.setPixelColor(   i, c); // First eye
+          }
+          pixels.show();
+          offset++;
+          delay(50);
+          break;
+        }
+       */
+       
+       
+        t = millis();
+        if((t - prevTime) > 8000) {      // Every 8 seconds...
+          mode++;                        // Next mode
+          if(mode > 1) {                 // End of modes?
+            mode = 0;                    // Start modes over
+            color >>= 8;                 // Next color R->G->B
+            if(!color) color = 0xFF0000; // Reset to red
+          }
+          for(i=0; i<32; i++) pixels.setPixelColor(i, 0);
+          prevTime = t;
+        }
+         //Neo Pixel part stop     
+        
+}
 
-        #ifdef OUTPUT_READABLE_YAWPITCHROLL
-            // display Euler angles in degrees
-            mpu.dmpGetQuaternion(&q, fifoBuffer);
-            mpu.dmpGetGravity(&gravity, &q);
-            mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
-            Serial.print("ypr\t");
-            Serial.print(ypr[0] * 180/M_PI);
-            Serial.print("\t");
-            Serial.print(ypr[1] * 180/M_PI);
-            Serial.print("\t");
-            Serial.println(ypr[2] * 180/M_PI);
-        #endif
 
-        #ifdef OUTPUT_READABLE_REALACCEL
-            // display real acceleration, adjusted to remove gravity
-            mpu.dmpGetQuaternion(&q, fifoBuffer);
-            mpu.dmpGetAccel(&aa, fifoBuffer);
-            mpu.dmpGetGravity(&gravity, &q);
-            mpu.dmpGetLinearAccel(&aaReal, &aa, &gravity);
-            Serial.print("areal\t");
-            Serial.print(aaReal.x);
-            Serial.print("\t");
-            Serial.print(aaReal.y);
-            Serial.print("\t");
-            Serial.println(aaReal.z);
-        #endif
-
-        #ifdef OUTPUT_READABLE_WORLDACCEL
-            // display initial world-frame acceleration, adjusted to remove gravity
-            // and rotated based on known orientation from quaternion
+void readDataFromMCU(){
             mpu.dmpGetQuaternion(&q, fifoBuffer);
             mpu.dmpGetAccel(&aa, fifoBuffer);
             mpu.dmpGetGravity(&gravity, &q);
             mpu.dmpGetLinearAccel(&aaReal, &aa, &gravity);
             mpu.dmpGetLinearAccelInWorld(&aaWorld, &aaReal, &q);
-            Serial.print("aworld\t");
-            Serial.print(aaWorld.x);
-            Serial.print("\t");
-            Serial.print(aaWorld.y);
-            Serial.print("\t");
-            Serial.println(aaWorld.z);
-        #endif
-    
-        #ifdef OUTPUT_TEAPOT
-            // display quaternion values in InvenSense Teapot demo format:
-            teapotPacket[2] = fifoBuffer[0];
-            teapotPacket[3] = fifoBuffer[1];
-            teapotPacket[4] = fifoBuffer[4];
-            teapotPacket[5] = fifoBuffer[5];
-            teapotPacket[6] = fifoBuffer[8];
-            teapotPacket[7] = fifoBuffer[9];
-            teapotPacket[8] = fifoBuffer[12];
-            teapotPacket[9] = fifoBuffer[13];
-            Serial.write(teapotPacket, 14);
-            teapotPacket[11]++; // packetCount, loops at 0xFF on purpose
-        #endif
-
-        // blink LED to indicate activity
-        blinkState = !blinkState;
-        digitalWrite(LED_PIN, blinkState);
-    }
 }
+
+void sumDataFromMCU(){
+  totalX = totalX + (q.x*100);
+  totalY = totalY + (q.y*100);
+  totalZ = totalZ + (q.z*100);
+  noOfAddedSamples = noOfAddedSamples + 1;
+}
+
+void calculateAverage(){
+  lastAverageX = averageX;
+  lastAverageY = averageY;
+  lastAverageZ = averageZ;
+  averageX = 0;
+  averageY = 0;
+  averageZ = 0;
+  averageX = totalX / noOfAddedSamples;
+  averageY = totalY / noOfAddedSamples;
+  averageZ = totalZ / noOfAddedSamples;
+  }
+
+
+boolean checkIfTimeToCalculateAverage(){
+        currentTimeRead = millis();
+        if((currentTimeRead - prevTimeRead) > 500){
+        prevTimeRead = currentTimeRead;
+        return true;
+        }
+        else
+        return false;
+}
+
+void calcAndClearAverage(){
+        calculateAverage();
+        printCurrentAverageToCommandLine();
+        clearMCUValues();
+      }
+
+void printCurrentAverageToCommandLine(){
+     Serial.print("current average\t");
+            Serial.print(averageX);
+            Serial.print("\t");
+            Serial.print(averageY);
+            Serial.print("\t");
+            Serial.println(averageZ);
+            Serial.print("\t");
+            Serial.println(noOfAddedSamples);
+}
+
+void clearMCUValues(){
+noOfAddedSamples = 0;
+currentX = 0;
+currentY = 0;
+currentZ = 0;
+totalX = 0;
+totalY = 0;
+totalZ = 0;
+
+}
+
