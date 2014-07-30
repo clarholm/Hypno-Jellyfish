@@ -107,27 +107,46 @@ float averageZ;
 float lastAverageX;
 float lastAverageY;
 float lastAverageZ;
-float CurrentXspeed;
-float CurrentYspeed;
-float CurrentZspeed;
-int movementTreshold = 8;
-int red;
-int green;
-int blue;
-int c;
-uint8_t myColors[][3] = {{232, 100, 255},   // purple
-                         {200, 200, 20},   // yellow 
-                         {30, 200, 200},   // blue
-                         {130, 22, 200}, 
-                         {30, 50, 55}, 
-                         {22, 160 , 70}, //pink
-                          };
-int wait = 25;
-// don't edit the line below
-#define FAVCOLORS sizeof(myColors) / 3
+
 //Neopixel conf done
 
 //MCU conf start
+
+// uncomment "OUTPUT_READABLE_QUATERNION" if you want to see the actual
+// quaternion components in a [w, x, y, z] format (not best for parsing
+// on a remote host such as Processing or something though)
+//#define OUTPUT_READABLE_QUATERNION
+
+// uncomment "OUTPUT_READABLE_EULER" if you want to see Euler angles
+// (in degrees) calculated from the quaternions coming from the FIFO.
+// Note that Euler angles suffer from gimbal lock (for more info, see
+// http://en.wikipedia.org/wiki/Gimbal_lock)
+//#define OUTPUT_READABLE_EULER
+
+// uncomment "OUTPUT_READABLE_YAWPITCHROLL" if you want to see the yaw/
+// pitch/roll angles (in degrees) calculated from the quaternions coming
+// from the FIFO. Note this also requires gravity vector calculations.
+// Also note that yaw/pitch/roll angles suffer from gimbal lock (for
+// more info, see: http://en.wikipedia.org/wiki/Gimbal_lock)
+//#define OUTPUT_READABLE_YAWPITCHROLL
+
+// uncomment "OUTPUT_READABLE_REALACCEL" if you want to see acceleration
+// components with gravity removed. This acceleration reference frame is
+// not compensated for orientation, so +X is always +X according to the
+// sensor, just without the effects of gravity. If you want acceleration
+// compensated for orientation, us OUTPUT_READABLE_WORLDACCEL instead.
+//#define OUTPUT_READABLE_REALACCEL
+
+// uncomment "OUTPUT_READABLE_WORLDACCEL" if you want to see acceleration
+// components with gravity removed and adjusted for the world frame of
+// reference (yaw is relative to initial orientation, since no magnetometer
+// is present in this case). Could be quite handy in some cases.
+//#define OUTPUT_READABLE_WORLDACCEL
+
+// uncomment "OUTPUT_TEAPOT" if you want output that matches the
+// format used for the InvenSense teapot demo
+//#define OUTPUT_TEAPOT
+
 
 
 
@@ -312,25 +331,8 @@ void loop() {
         readDataFromMCU();
         sumDataFromMCU();
         if (checkIfTimeToCalculateAverage()== true){
-        calculateAverage();
-        CurrentXspeed = calculateSpeed(averageX, lastAverageX);
-        CurrentYspeed = calculateSpeed(averageY, lastAverageY);
-        CurrentZspeed = calculateSpeed(averageZ, lastAverageZ);
-        if (abs(CurrentXspeed)>movementTreshold || abs(CurrentYspeed)>movementTreshold || abs(CurrentZspeed)>movementTreshold){
-        Serial.println("Movement detected");
-        printCurrentSpeedToCommandLine();
-        fadeOutCurrentColor(10);
-        pickNewColor();
-        changeColor();
-        
-
-       }
-        //printCurrentSpeedToCommandLine();
-        //printCurrentAverageToCommandLine();
-        clearMCUValues();
+        calcAndClearAverage();
         }
-        
-        
 
         /*
         switch(mode) {
@@ -356,7 +358,7 @@ void loop() {
         }
        */
        
-       /*
+       
         t = millis();
         if((t - prevTime) > 8000) {      // Every 8 seconds...
           mode++;                        // Next mode
@@ -368,69 +370,10 @@ void loop() {
           for(i=0; i<32; i++) pixels.setPixelColor(i, 0);
           prevTime = t;
         }
-        */
          //Neo Pixel part stop     
         
 }
-void fadeOutCurrentColor(int steps){
-for (int x=steps; x >= 0; x--) {
-      int r = red * x; r /= steps;
-      int g = green * x; g /= steps;
-      int b = blue * x; b /= steps;
-            for(int i=0; i<12; i++) {
-      pixels.setPixelColor(i, pixels.Color(r, g, b));
-      }
-      pixels.show();
-      delay(wait);
-      }
-      
 
-}
-
-void changeColor()
-{
-  
-      for (int x=0; x < 10; x++) {
-      int r = red * (x+1); r /= 10;
-      int g = green * (x+1); g /= 10;
-      int b = blue * (x+1); b /= 10;
-      
-      for(int i=0; i<12; i++) {
-      pixels.setPixelColor(i, pixels.Color(r, g, b));
-      }
-      pixels.show();
-      delay(wait);
-      }
-      
-        for(int i=0; i<12; i++) {
-        pixels.setPixelColor(i, pixels.Color(red, green, blue)); // First eye
-        }
-      printColor(red, green,blue);
-        pixels.show();
-
-
-}
-
-void printColor(int red, int green, int blue){
-            Serial.print("R,G,B\t");
-            Serial.print(red);
-            Serial.print("\t");
-            Serial.print(green);
-            Serial.print("\t");
-            Serial.println(blue);
-}
-
-void pickNewColor(){
-    c = random(FAVCOLORS);
-    red = myColors[c][0];
-    green = myColors[c][1];
-    blue = myColors[c][2]; 
-}
-
-float calculateSpeed(float currentDir, float lastDir){
-  float currentSpeed = lastDir - currentDir;
-  return currentSpeed;
-}
 
 void readDataFromMCU(){
             mpu.dmpGetQuaternion(&q, fifoBuffer);
@@ -462,7 +405,7 @@ void calculateAverage(){
 
 boolean checkIfTimeToCalculateAverage(){
         currentTimeRead = millis();
-        if((currentTimeRead - prevTimeRead) > 300){
+        if((currentTimeRead - prevTimeRead) > 500){
         prevTimeRead = currentTimeRead;
         return true;
         }
@@ -470,14 +413,11 @@ boolean checkIfTimeToCalculateAverage(){
         return false;
 }
 
-void printCurrentSpeedToCommandLine(){
-     Serial.print("Current Speed\t");
-            Serial.print(CurrentXspeed);
-            Serial.print("\t");
-            Serial.print(CurrentYspeed);
-            Serial.print("\t");
-            Serial.println(CurrentZspeed);
-}
+void calcAndClearAverage(){
+        calculateAverage();
+        printCurrentAverageToCommandLine();
+        clearMCUValues();
+      }
 
 void printCurrentAverageToCommandLine(){
      Serial.print("current average\t");
