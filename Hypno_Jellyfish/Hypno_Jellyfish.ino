@@ -46,7 +46,6 @@ THE SOFTWARE.
 
 
 #include "I2Cdev.h"
-
 #include "MPU6050_6Axis_MotionApps20.h"
 //#include "MPU6050.h" // not necessary if using MotionApps include file
 
@@ -88,9 +87,6 @@ MPU6050 mpu;
  
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(12, PIN, NEO_RGB + NEO_KHZ800);
 
-uint8_t  mode   = 0, // Current animation effect
-         offset = 0; // Position of spinny eyes
-uint32_t color  = 0xFF0000; // Start red
 uint32_t currentTimeRead;
 uint32_t prevTimeRead;
 uint32_t prevTime;
@@ -115,6 +111,10 @@ int red;
 int green;
 int blue;
 int c;
+int lastc;
+int lastTimeForColorChange;
+int currentTimeBeforeColorChange;
+
 uint8_t myColors[][3] = {{232, 100, 255},   // purple
                          {200, 200, 20},   // yellow 
                          {30, 200, 200},   // blue
@@ -175,7 +175,7 @@ void setup() {
   
     //Neo Pixel start
     pixels.begin();
-    pixels.setBrightness(85); // 1/3 brightness
+    pixels.setBrightness(85);
     prevTime = millis();
     //Neo Pixel done
   
@@ -305,7 +305,6 @@ void loop() {
 
     }
         
-        //Neo Pixel part start
         uint8_t  i;
         uint32_t t;
         
@@ -316,62 +315,27 @@ void loop() {
         CurrentXspeed = calculateSpeed(averageX, lastAverageX);
         CurrentYspeed = calculateSpeed(averageY, lastAverageY);
         CurrentZspeed = calculateSpeed(averageZ, lastAverageZ);
+        currentTimeBeforeColorChange = millis();
         if (abs(CurrentXspeed)>movementTreshold || abs(CurrentYspeed)>movementTreshold || abs(CurrentZspeed)>movementTreshold){
+        
+        if (currentTimeBeforeColorChange - lastTimeForColorChange > 1000){ //at least 1 second between color changes
+        lastTimeForColorChange = currentTimeBeforeColorChange;
         Serial.println("Movement detected");
         printCurrentSpeedToCommandLine();
         fadeOutCurrentColor(10);
         pickNewColor();
         changeColor();
         
-
        }
-        //printCurrentSpeedToCommandLine();
-        //printCurrentAverageToCommandLine();
+       }
         clearMCUValues();
         }
-        
+       
         
 
-        /*
-        switch(mode) {
-       
-         case 0: // Random sparks - just one LED on at a time!
-          i = random(12);
-          pixels.setPixelColor(i, color);
-          pixels.show();
-          delay(10);
-          pixels.setPixelColor(i, 0);
-          break;
-       
-         case 1: // Spinny wheels (3 LEDs on at a time)
-          for(i=0; i<9; i++) {
-            uint32_t c = 0;
-            if(((offset + i) & 2) < 2) c = color; // 4 pixels on...
-            pixels.setPixelColor(   i, c); // First eye
-          }
-          pixels.show();
-          offset++;
-          delay(50);
-          break;
-        }
-       */
-       
-       /*
-        t = millis();
-        if((t - prevTime) > 8000) {      // Every 8 seconds...
-          mode++;                        // Next mode
-          if(mode > 1) {                 // End of modes?
-            mode = 0;                    // Start modes over
-            color >>= 8;                 // Next color R->G->B
-            if(!color) color = 0xFF0000; // Reset to red
-          }
-          for(i=0; i<32; i++) pixels.setPixelColor(i, 0);
-          prevTime = t;
-        }
-        */
-         //Neo Pixel part stop     
         
 }
+
 void fadeOutCurrentColor(int steps){
 for (int x=steps; x >= 0; x--) {
       int r = red * x; r /= steps;
@@ -421,7 +385,11 @@ void printColor(int red, int green, int blue){
 }
 
 void pickNewColor(){
+    lastc = c;
     c = random(FAVCOLORS);
+    while (lastc == c){
+    c = random(FAVCOLORS);
+  }
     red = myColors[c][0];
     green = myColors[c][1];
     blue = myColors[c][2]; 
