@@ -307,22 +307,21 @@ void loop() {
         
         uint8_t  i;
         uint32_t t;
-        
         readDataFromMCU();
         sumDataFromMCU();
-        if (checkIfTimeToCalculateAverage()== true){
+        if (checkIfTimeToCalculateAverage()== true){ //Measurements are collected during 300ms.
         calculateAverage();
-        CurrentXspeed = calculateSpeed(averageX, lastAverageX);
-        CurrentYspeed = calculateSpeed(averageY, lastAverageY);
+        CurrentXspeed = calculateSpeed(averageX, lastAverageX); // The light should change on movement, so current value is compared to the last value to get the delta. 
+        CurrentYspeed = calculateSpeed(averageY, lastAverageY); // The delta is stored as Current speed.
         CurrentZspeed = calculateSpeed(averageZ, lastAverageZ);
-        currentTimeBeforeColorChange = millis();
-        if (abs(CurrentXspeed)>movementTreshold || abs(CurrentYspeed)>movementTreshold || abs(CurrentZspeed)>movementTreshold){
+        currentTimeBeforeColorChange = millis(); //Timestamp to prevent to freqent color changes.
+        if (abs(CurrentXspeed)>movementTreshold || abs(CurrentYspeed)>movementTreshold || abs(CurrentZspeed)>movementTreshold){ //current speed exceeds treshold this is intrepreted as movement detected.
         
         if (currentTimeBeforeColorChange - lastTimeForColorChange > 1000){ //at least 1 second between color changes
-        lastTimeForColorChange = currentTimeBeforeColorChange;
+        lastTimeForColorChange = currentTimeBeforeColorChange; //Timestamp to prevent to freqent color changes.
         Serial.println("Movement detected");
         printCurrentSpeedToCommandLine();
-        fadeOutCurrentColor(10);
+        fadeOutCurrentColor(10); //To smooth out the color changes we fade out current color and fade in the other color.
         pickNewColor();
         changeColor();
         
